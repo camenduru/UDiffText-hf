@@ -1,6 +1,6 @@
 ---
 title: UDiffText
-emoji: 🐢
+emoji: 😋
 colorFrom: purple
 colorTo: blue
 sdk: gradio
