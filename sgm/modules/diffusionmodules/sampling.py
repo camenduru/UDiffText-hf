@@ -289,9 +289,9 @@ class EulerEDMSampler(EDMSampler):
             sections.append(attn_map)
         
         section = np.stack(sections)
-        np.save(f"temp/seg_map/seg_{save_name}.npy", section)
+        np.save(f"./temp/seg_map/seg_{save_name}.npy", section)
 
-        save_image(image_, f"temp/seg_map/seg_{save_name}.png", normalize=True)
+        save_image(image_, f"./temp/seg_map/seg_{save_name}.png", normalize=True)
 
     def get_init_noise(self, cfgs, model, cond, batch, uc=None):
 

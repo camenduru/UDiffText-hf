@@ -2021,7 +2021,7 @@ class UNetAddModel(nn.Module):
             sns.heatmap(attn_map_i[j], square=True, xticklabels=False, yticklabels=False)
             if j < len(tokens):
                 ax.set_title(tokens[j])
-        fig.savefig(f"temp/attn_map/attn_map_{save_name}.png")
+        fig.savefig(f"./temp/attn_map/attn_map_{save_name}.png")
         plt.close()
 
         return attn_map_i
