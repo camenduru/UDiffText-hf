@@ -24,6 +24,7 @@ dual_conditioner: False
 steps: 50
 init_step: 0
 num_workers: 0
+use_gpu: False
 gpu: 0
 max_iter: 100
 

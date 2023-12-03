@@ -32,18 +32,19 @@ SD_XL_BASE_RATIOS = {
     "3.0": (1728, 576),
 }
 
-def init_model(cfg):
+def init_model(cfgs):
 
-    model_cfg = OmegaConf.load(cfg.model_cfg_path)
-    ckpt = cfg.load_ckpt_path
+    model_cfg = OmegaConf.load(cfgs.model_cfg_path)
+    ckpt = cfgs.load_ckpt_path
 
     model = instantiate_from_config(model_cfg.model)
     model.init_from_ckpt(ckpt)
 
-    if cfg.type == "train":
+    if cfgs.type == "train":
         model.train()
     else:
-        model.to(torch.device("cuda", index=cfg.gpu))
+        if cfgs.use_gpu:
+            model.to(torch.device("cuda", index=cfgs.gpu))
         model.eval()
         model.freeze()
 
@@ -108,7 +109,7 @@ def deep_copy(batch):
 def prepare_batch(cfgs, batch):
 
     for key in batch:
-        if isinstance(batch[key], torch.Tensor):
+        if isinstance(batch[key], torch.Tensor) and cfgs.use_gpu:
             batch[key] = batch[key].to(torch.device("cuda", index=cfgs.gpu))
 
     if not cfgs.dual_conditioner:
