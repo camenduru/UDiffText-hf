@@ -19,12 +19,11 @@ aae_enabled: False
 detailed: True
 dual_conditioner: False
 
-
 # runtime
 steps: 50
 init_step: 0
 num_workers: 0
-use_gpu: False
+use_gpu: True
 gpu: 0
 max_iter: 100
 
