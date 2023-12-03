@@ -190,7 +190,7 @@ if __name__ == "__main__":
                         attn_map = gr.Image(show_label=False, show_download_button=False)
                     with gr.Tab(label="Segmentation Maps"):
                         gr.Markdown("### Character-level segmentation maps (using upscaled attention maps):")
-                        seg_map = gr.AnnotatedImage(height=384, show_label=False, show_download_button=False)
+                        seg_map = gr.AnnotatedImage(height=384, show_label=False)
 
         # examples
         examples = []
