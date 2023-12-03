@@ -131,6 +131,9 @@ def demo_predict(input_blk, text, num_samples, steps, scale, seed, show_detail):
 
 if __name__ == "__main__":
 
+    os.makedirs("./temp/attn_map", exist_ok=True)
+    os.makedirs("./temp/seg_map", exist_ok=True)
+
     cfgs = OmegaConf.load("./configs/demo.yaml")
 
     model = init_model(cfgs)
