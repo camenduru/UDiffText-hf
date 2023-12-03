@@ -7,7 +7,6 @@ from typing import Dict, Union
 
 import imageio
 import torch
-import json
 import numpy as np
 import torch.nn.functional as F
 from omegaconf import ListConfig, OmegaConf

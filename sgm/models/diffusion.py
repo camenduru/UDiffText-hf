@@ -5,7 +5,6 @@ import pytorch_lightning as pl
 import torch
 from omegaconf import ListConfig, OmegaConf
 from safetensors.torch import load_file as load_safetensors
-from torch.optim.lr_scheduler import LambdaLR
 
 from ..modules import UNCONDITIONAL_CONFIG
 from ..modules.diffusionmodules.wrappers import OPENAIUNETWRAPPER
