@@ -150,7 +150,7 @@ if __name__ == "__main__":
                 <h1 style="font-weight: 600; font-size: 2rem; margin: 0rem;">
                     UDiffText: A Unified Framework for High-quality Text Synthesis in Arbitrary Images via Character-aware Diffusion Models
                 </h1>        
-                <ul style="text-align: center; margin: 0; padding: 0;"> 
+                <ul style="text-align: center; margin: 10px; padding: 0;"> 
                     <li style="display: inline-block; margin:auto;"><a href='https://arxiv.org/pdf/******'><img src='https://img.shields.io/badge/Arxiv-******-DF826C'></a></li>
                     <li style="display: inline-block; margin:auto;"><a href='https://github.com/ZYM-PKU/UDiffText'><img src='https://img.shields.io/badge/Code-UDiffText-D0F288'></a></li>
                     <li style="display: inline-block; margin:auto;"><a href='https://udifftext.github.io'><img src='https://img.shields.io/badge/Project-UDiffText-8ADAB2'></a></li>

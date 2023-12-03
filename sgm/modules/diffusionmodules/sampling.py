@@ -409,9 +409,9 @@ class EulerEDMSampler(EDMSampler):
 
             alpha = 20 * np.sqrt(scales[i])
             update = aae_enabled
-            save_loss = detailed
+            save_loss = aae_enabled
             save_attn = detailed and (i == (num_sigmas-1)//2)
-            save_inter = detailed
+            save_inter = aae_enabled
 
             if i in iter_lst:
                 iter_enabled = True
