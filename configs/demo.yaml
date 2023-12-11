@@ -7,6 +7,7 @@ model_cfg_path: "./configs/test/textdesign_sd_2.yaml"
 # param
 H: 512
 W: 512
+txt_len: [1, 12]
 seq_len: 12
 batch_size: 1
 

@@ -40,6 +40,9 @@ def demo_predict(input_blk, text, num_samples, steps, scale, seed, show_detail):
 
     global cfgs, global_index
 
+    if len(text) < cfgs.txt_len[0] or len(text) > cfgs.txt_len[1]:
+        raise gr.Error("Illegal text length!")
+
     global_index += 1
 
     if num_samples > 1: cfgs.noise_iters = 0
@@ -51,7 +54,7 @@ def demo_predict(input_blk, text, num_samples, steps, scale, seed, show_detail):
     seed_everything(seed)
 
     sampler = init_sampling(cfgs)
-
+    
     image = input_blk["image"]
     mask = input_blk["mask"]
     image = cv2.resize(image, (cfgs.W, cfgs.H))
@@ -156,7 +159,7 @@ if __name__ == "__main__":
             with gr.Column():
 
                 input_blk = gr.Image(source='upload', tool='sketch', type="numpy", label="Input", height=512)
-                text = gr.Textbox(label="Text to render:", info="the text you want to render at the masked region")
+                text = gr.Textbox(label="Text to render: (1~12 characters)", info="the text you want to render at the masked region")
                 run_button = gr.Button(variant="primary")
 
                 with gr.Accordion("Advanced options", open=False):
