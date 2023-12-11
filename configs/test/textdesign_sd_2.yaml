@@ -105,3 +105,22 @@ model:
           dropout: 0.0
         lossconfig:
           target: torch.nn.Identity
+
+    loss_fn_config:
+      target: sgm.modules.diffusionmodules.loss.FullLoss # StandardDiffusionLoss
+      params:
+        seq_len: 12
+        kernel_size: 3
+        gaussian_sigma: 1.0
+        min_attn_size: 16
+        lambda_local_loss: 0.01
+        lambda_ocr_loss: 0.001
+        ocr_enabled: False
+        
+        sigma_sampler_config:
+          target: sgm.modules.diffusionmodules.sigma_sampling.DiscreteSampling
+          params:
+            num_idx: 1000
+            
+            discretization_config:
+              target: sgm.modules.diffusionmodules.discretizer.LegacyDDPMDiscretization
