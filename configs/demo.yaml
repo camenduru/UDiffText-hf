@@ -1,7 +1,7 @@
 type: "demo"
 
 # path
-load_ckpt_path: "./checkpoints/st-step=100000+la-step=100000-simp.ckpt"
+load_ckpt_path: "./checkpoints/st-step=100000+la-step=100000-v2.ckpt"
 model_cfg_path: "./configs/test/textdesign_sd_2.yaml"
 
 # param
@@ -16,8 +16,7 @@ scale: [4.0, 0.0] # content scale, style scale
 noise_iters: 10
 force_uc_zero_embeddings: ["ref", "label"]
 aae_enabled: False
-detailed: True
-dual_conditioner: False
+detailed: False
 
 # runtime
 steps: 50

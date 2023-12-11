@@ -8,7 +8,7 @@ from omegaconf import OmegaConf
 from contextlib import nullcontext
 from pytorch_lightning import seed_everything
 from os.path import join as ospj
-
+ 
 from util import *
 
 
@@ -18,30 +18,17 @@ def predict(cfgs, model, sampler, batch):
     
     with context():
         
-        batch, batch_uc_1, batch_uc_2 = prepare_batch(cfgs, batch)
+        batch, batch_uc_1 = prepare_batch(cfgs, batch)
 
-        if cfgs.dual_conditioner:
-            c, uc_1, uc_2 = model.conditioner.get_unconditional_conditioning(
-                batch,
-                batch_uc_1=batch_uc_1,
-                batch_uc_2=batch_uc_2,
-                force_uc_zero_embeddings=cfgs.force_uc_zero_embeddings,
-            )
-        else:
-            c, uc_1 = model.conditioner.get_unconditional_conditioning(
-                batch,
-                batch_uc=batch_uc_1,
-                force_uc_zero_embeddings=cfgs.force_uc_zero_embeddings,
-            )
+        c, uc_1 = model.conditioner.get_unconditional_conditioning(
+            batch,
+            batch_uc=batch_uc_1,
+            force_uc_zero_embeddings=cfgs.force_uc_zero_embeddings,
+        )
         
-        if cfgs.dual_conditioner:
-            x = sampler.get_init_noise(cfgs, model, cond=c, batch=batch, uc_1=uc_1, uc_2=uc_2)
-            samples_z = sampler(model, x, cond=c, batch=batch, uc_1=uc_1, uc_2=uc_2, init_step=0,
-                                aae_enabled = cfgs.aae_enabled, detailed = cfgs.detailed)
-        else:
-            x = sampler.get_init_noise(cfgs, model, cond=c, batch=batch, uc=uc_1)
-            samples_z = sampler(model, x, cond=c, batch=batch, uc=uc_1, init_step=0,
-                                aae_enabled = cfgs.aae_enabled, detailed = cfgs.detailed)
+        x = sampler.get_init_noise(cfgs, model, cond=c, batch=batch, uc=uc_1)
+        samples_z = sampler(model, x, cond=c, batch=batch, uc=uc_1, init_step=0,
+                            aae_enabled = cfgs.aae_enabled, detailed = cfgs.detailed)
 
         samples_x = model.decode_first_stage(samples_z)
         samples = torch.clamp((samples_x + 1.0) / 2.0, min=0.0, max=1.0)
@@ -131,6 +118,7 @@ def demo_predict(input_blk, text, num_samples, steps, scale, seed, show_detail):
 
 if __name__ == "__main__":
 
+    os.makedirs("./temp", exist_ok=True)
     os.makedirs("./temp/attn_map", exist_ok=True)
     os.makedirs("./temp/seg_map", exist_ok=True)
 
@@ -151,7 +139,7 @@ if __name__ == "__main__":
                     UDiffText: A Unified Framework for High-quality Text Synthesis in Arbitrary Images via Character-aware Diffusion Models
                 </h1>        
                 <ul style="text-align: center; margin: 0.5rem;"> 
-                    <li style="display: inline-block; margin:auto;"><a href='https://arxiv.org/pdf/******'><img src='https://img.shields.io/badge/Arxiv-******-DF826C'></a></li>
+                    <li style="display: inline-block; margin:auto;"><a href='https://arxiv.org/abs/2312.04884'><img src='https://img.shields.io/badge/Arxiv-2312.04884-DF826C'></a></li>
                     <li style="display: inline-block; margin:auto;"><a href='https://github.com/ZYM-PKU/UDiffText'><img src='https://img.shields.io/badge/Code-UDiffText-D0F288'></a></li>
                     <li style="display: inline-block; margin:auto;"><a href='https://udifftext.github.io'><img src='https://img.shields.io/badge/Project-UDiffText-8ADAB2'></a></li>
                 </ul> 
@@ -177,7 +165,7 @@ if __name__ == "__main__":
                     steps = gr.Slider(label="Steps", info ="denoising sampling steps", minimum=1, maximum=200, value=50, step=1)
                     scale = gr.Slider(label="Guidance Scale", info="the scale of classifier-free guidance (CFG)", minimum=0.0, maximum=10.0, value=4.0, step=0.1)
                     seed = gr.Slider(label="Seed", info="random seed for noise initialization", minimum=0, maximum=2147483647, step=1, randomize=True)
-                    show_detail = gr.Checkbox(label="Show Detail", info="show the additional visualization results", value=True)
+                    show_detail = gr.Checkbox(label="Show Detail", info="show the additional visualization results", value=False)
 
             with gr.Column():
 
