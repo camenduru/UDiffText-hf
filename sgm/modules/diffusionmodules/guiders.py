@@ -11,8 +11,8 @@ class VanillaCFG:
     """
 
     def __init__(self, scale, dyn_thresh_config=None):
-        scale_schedule = lambda scale, sigma: scale  # independent of step
-        self.scale_schedule = partial(scale_schedule, scale)
+
+        self.scale_value = scale
         self.dyn_thresh = instantiate_from_config(
             default(
                 dyn_thresh_config,
@@ -24,8 +24,7 @@ class VanillaCFG:
 
     def __call__(self, x, sigma):
         x_u, x_c = x.chunk(2)
-        scale_value = self.scale_schedule(sigma)
-        x_pred = self.dyn_thresh(x_u, x_c, scale_value)
+        x_pred = self.dyn_thresh(x_u, x_c, self.scale_value)
         return x_pred
 
     def prepare_inputs(self, x, s, c, uc):

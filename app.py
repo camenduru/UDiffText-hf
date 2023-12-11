@@ -53,7 +53,8 @@ def demo_predict(input_blk, text, num_samples, steps, scale, seed, show_detail):
     cfgs.detailed = show_detail
     seed_everything(seed)
 
-    sampler = init_sampling(cfgs)
+    sampler.num_steps = steps
+    sampler.guider.scale_value = scale
     
     image = input_blk["image"]
     mask = input_blk["mask"]
@@ -128,6 +129,7 @@ if __name__ == "__main__":
     cfgs = OmegaConf.load("./configs/demo.yaml")
 
     model = init_model(cfgs)
+    sampler = init_sampling(cfgs)
     global_index = 0
 
     block = gr.Blocks().queue()
