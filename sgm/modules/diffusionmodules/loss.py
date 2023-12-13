@@ -78,9 +78,7 @@ class FullLoss(StandardDiffusionLoss):
         min_attn_size=16,
         lambda_local_loss=0.0,
         lambda_ocr_loss=0.0,
-        lambda_style_loss=0.0,
         ocr_enabled = False,
-        style_enabled = False,
         predictor_config = None,
         *args, **kwarg
     ):
@@ -93,9 +91,7 @@ class FullLoss(StandardDiffusionLoss):
         self.min_attn_size = min_attn_size
         self.lambda_local_loss = lambda_local_loss
         self.lambda_ocr_loss = lambda_ocr_loss
-        self.lambda_style_loss = lambda_style_loss
 
-        self.style_enabled = style_enabled
         self.ocr_enabled = ocr_enabled
         if ocr_enabled:
             self.predictor = instantiate_from_config(predictor_config)
@@ -152,15 +148,9 @@ class FullLoss(StandardDiffusionLoss):
             ocr_loss = self.get_ocr_loss(model_output, batch["r_bbox"], batch["label"], first_stage_model, scaler)
             ocr_loss = ocr_loss.mean()
 
-        if self.style_enabled:
-            style_loss = self.get_style_local_loss(network.diffusion_model.attn_map_cache, batch["mask"])
-            style_loss = style_loss.mean()
-
         loss = diff_loss + self.lambda_local_loss * local_loss
         if self.ocr_enabled:
             loss += self.lambda_ocr_loss * ocr_loss
-        if self.style_enabled:
-            loss += self.lambda_style_loss * style_loss
 
         loss_dict = {
             "loss/diff_loss": diff_loss,
@@ -170,8 +160,6 @@ class FullLoss(StandardDiffusionLoss):
 
         if self.ocr_enabled:
             loss_dict["loss/ocr_loss"] = ocr_loss
-        if self.style_enabled:
-            loss_dict["loss/style_loss"] = style_loss
 
         return loss, loss_dict
     
@@ -195,9 +183,6 @@ class FullLoss(StandardDiffusionLoss):
         count = 0
 
         for item in attn_map_cache:
-
-            name = item["name"]
-            if not name.endswith("t_attn"): continue
 
             heads = item["heads"]
             size = item["size"]
@@ -241,9 +226,6 @@ class FullLoss(StandardDiffusionLoss):
 
         for item in attn_map_cache:
 
-            name = item["name"]
-            if not name.endswith("t_attn"): continue
-
             heads = item["heads"]
             size = item["size"]
             attn_map = item["attn_map"]
@@ -252,7 +234,7 @@ class FullLoss(StandardDiffusionLoss):
 
             seg_l = seg_mask.shape[1]
 
-            bh, n, l = attn_map.shape # bh: batch size * heads / n: pixel length(h*w) / l: token length
+            bh, n, l = attn_map.shape # bh: batch size * heads / n : pixel length(h*w) / l: token length
             attn_map = attn_map.reshape((-1, heads, n, l)) # b, h, n, l
             
             assert seg_l <= l
@@ -276,45 +258,6 @@ class FullLoss(StandardDiffusionLoss):
 
             p_loss = p_loss.sum(dim = -1) / seg_mask.sum(dim = -1) # b,
             n_loss = n_loss.sum(dim = -1) / seg_mask.sum(dim = -1) # b,
-
-            f_loss = n_loss - p_loss # b,
-            loss += f_loss
-            count += 1
-
-        loss = loss / count
-
-        return loss
-    
-    def get_style_local_loss(self, attn_map_cache, mask):
-
-        loss = 0
-        count = 0
-
-        for item in attn_map_cache:
-
-            name = item["name"]
-            if not name.endswith("v_attn"): continue
-
-            heads = item["heads"]
-            size = item["size"]
-            attn_map = item["attn_map"]
-
-            if size < self.min_attn_size: continue
-
-            bh, n, l = attn_map.shape # bh: batch size * heads / n: pixel length(h*w) / l: token length
-            attn_map = attn_map.reshape((-1, heads, n, l)) # b, h, n, l
-            attn_map = attn_map.permute(0, 1, 3, 2) # b, h, l, n
-            attn_map = attn_map.mean(dim = 1) # b, l, n
-
-            mask_map = F.interpolate(mask, (size, size))
-            mask_map = mask_map.reshape((-1, l, n)) # b, l, n
-            n_mask_map = 1 - mask_map
-
-            p_loss = (mask_map * attn_map).sum(dim = -1) / (mask_map.sum(dim = -1) + 1e-5) # b, l
-            n_loss = (n_mask_map * attn_map).sum(dim = -1) / (n_mask_map.sum(dim = -1) + 1e-5) # b, l
-
-            p_loss = p_loss.mean(dim = -1)
-            n_loss = n_loss.mean(dim = -1)
 
             f_loss = n_loss - p_loss # b,
             loss += f_loss

@@ -7,6 +7,7 @@ from typing import Dict, Union
 
 import imageio
 import torch
+import json
 import numpy as np
 import torch.nn.functional as F
 from omegaconf import ListConfig, OmegaConf
@@ -251,15 +252,47 @@ class EulerEDMSampler(EDMSampler):
 
         return x
 
-    def save_segment_map(self, attn_maps, tokens=None, save_name=None):
+    def create_pascal_label_colormap(self):
+        """
+        PASCAL VOC 分割数据集的类别标签颜色映射label colormap
 
+        返回:
+            可视化分割结果的颜色映射Colormap
+        """
+        colormap = np.zeros((256, 3), dtype=int)
+        ind = np.arange(256, dtype=int)
+
+        for shift in reversed(range(8)):
+            for channel in range(3):
+                colormap[:, channel] |= ((ind >> channel) & 1) << shift
+            ind >>= 3
+
+        return colormap
+    
+    def save_segment_map(self, image, attn_maps, tokens=None, save_name=None):
+
+        colormap = self.create_pascal_label_colormap()
+        H, W = image.shape[-2:]
+
+        image_ = image*0.3
         sections = []
         for i in range(len(tokens)): 
             attn_map = attn_maps[i]
+            attn_map_t = np.tile(attn_map[None], (1,3,1,1)) # b, 3, h, w
+            attn_map_t = torch.from_numpy(attn_map_t)
+            attn_map_t = F.interpolate(attn_map_t, (W, H))
+
+            color = torch.from_numpy(colormap[i+1][None,:,None,None] / 255.0)
+            colored_attn_map = attn_map_t * color
+            colored_attn_map = colored_attn_map.to(device=image_.device)
+
+            image_ += colored_attn_map*0.7
             sections.append(attn_map)
         
         section = np.stack(sections)
-        np.save(f"./temp/seg_map/seg_{save_name}.npy", section)
+        np.save(f"temp/seg_map/seg_{save_name}.npy", section)
+
+        save_image(image_, f"temp/seg_map/seg_{save_name}.png", normalize=True)
 
     def get_init_noise(self, cfgs, model, cond, batch, uc=None):
 
@@ -343,7 +376,8 @@ class EulerEDMSampler(EDMSampler):
             local_loss = torch.zeros(1)
         if save_attn:
             attn_map = model.model.diffusion_model.save_attn_map(save_name=name, tokens=batch["label"][0])
-            self.save_segment_map(attn_map, tokens=batch["label"][0], save_name=name)
+            denoised_decode = model.decode_first_stage(denoised) if denoised_decode is None else denoised_decode
+            self.save_segment_map(denoised_decode, attn_map, tokens=batch["label"][0], save_name=name)
 
         d = to_d(x, sigma_hat, denoised)
         dt = append_dims(next_sigma - sigma_hat, x.ndim)
@@ -357,6 +391,188 @@ class EulerEDMSampler(EDMSampler):
 
         x, s_in, sigmas, num_sigmas, cond, uc = self.prepare_sampling_loop(
             x, cond, uc, num_steps
+        )
+
+        name = batch["name"][0]
+        inters = []
+        local_losses = []
+        scales = np.linspace(start=1.0, stop=0, num=num_sigmas)
+        iter_lst = np.linspace(start=5, stop=25, num=6, dtype=np.int32)
+        thres_lst = np.linspace(start=-0.5, stop=-0.8, num=6)
+
+        for i in self.get_sigma_gen(num_sigmas, init_step=init_step):
+
+            gamma = (
+                min(self.s_churn / (num_sigmas - 1), 2**0.5 - 1)
+                if self.s_tmin <= sigmas[i] <= self.s_tmax
+                else 0.0
+            )
+
+            alpha = 20 * np.sqrt(scales[i])
+            update = aae_enabled
+            save_loss = detailed
+            save_attn = detailed and (i == (num_sigmas-1)//2)
+            save_inter = aae_enabled
+
+            if i in iter_lst:
+                iter_enabled = True
+                thres = thres_lst[list(iter_lst).index(i)]
+            else:
+                iter_enabled = False
+                thres = 0.0
+
+            x, inter, local_loss = self.sampler_step(
+                s_in * sigmas[i],
+                s_in * sigmas[i + 1],
+                model,
+                x,
+                cond,
+                batch,
+                uc,
+                gamma,
+                alpha=alpha,
+                iter_enabled=iter_enabled,
+                thres=thres,
+                update=update,
+                name=name,
+                save_loss=save_loss,
+                save_attn=save_attn,
+                save_inter=save_inter
+            )
+
+            local_losses.append(local_loss.item())
+            if inter is not None:
+                inter = torch.clamp((inter + 1.0) / 2.0, min=0.0, max=1.0)[0]
+                inter = inter.cpu().numpy().transpose(1, 2, 0) * 255
+                inters.append(inter.astype(np.uint8))
+
+        print(f"Local losses: {local_losses}")
+
+        if len(inters) > 0:
+            imageio.mimsave(f"./temp/inters/{name}.gif", inters, 'GIF', duration=0.02)
+
+        return x
+    
+
+class EulerEDMDualSampler(EulerEDMSampler):
+
+    def prepare_sampling_loop(self, x, cond, uc_1=None, uc_2=None, num_steps=None):
+        sigmas = self.discretization(
+            self.num_steps if num_steps is None else num_steps, device=self.device
+        )
+        uc_1 = default(uc_1, cond)
+        uc_2 = default(uc_2, cond)
+
+        x *= torch.sqrt(1.0 + sigmas[0] ** 2.0)
+        num_sigmas = len(sigmas)
+
+        s_in = x.new_ones([x.shape[0]])
+
+        return x, s_in, sigmas, num_sigmas, cond, uc_1, uc_2
+
+    def denoise(self, x, model, sigma, cond, uc_1, uc_2):
+        denoised = model.denoiser(model.model, *self.guider.prepare_inputs(x, sigma, cond, uc_1, uc_2))
+        denoised = self.guider(denoised, sigma)
+        return denoised
+    
+    def get_init_noise(self, cfgs, model, cond, batch, uc_1=None, uc_2=None):
+
+        H, W = batch["target_size_as_tuple"][0]
+        shape = (cfgs.batch_size, cfgs.channel, int(H) // cfgs.factor, int(W) // cfgs.factor)
+
+        randn = torch.randn(shape).to(torch.device("cuda", index=cfgs.gpu))
+        x = randn.clone()
+
+        xs = []
+        self.verbose = False
+        for _ in range(cfgs.noise_iters):
+            
+            x, s_in, sigmas, num_sigmas, cond, uc_1, uc_2 = self.prepare_sampling_loop(
+                x, cond, uc_1, uc_2, num_steps=2
+            )
+
+            superv = {
+                "mask": batch["mask"] if "mask" in batch else None,
+                "seg_mask": batch["seg_mask"] if "seg_mask" in batch else None
+            }
+
+            local_losses = []
+
+            for i in self.get_sigma_gen(num_sigmas):
+
+                gamma = (
+                    min(self.s_churn / (num_sigmas - 1), 2**0.5 - 1)
+                    if self.s_tmin <= sigmas[i] <= self.s_tmax
+                    else 0.0
+                )
+
+                x, inter, local_loss = self.sampler_step(
+                    s_in * sigmas[i],
+                    s_in * sigmas[i + 1],
+                    model,
+                    x,
+                    cond,
+                    superv,
+                    uc_1,
+                    uc_2,
+                    gamma,
+                    save_loss=True
+                )
+
+                local_losses.append(local_loss.item())
+            
+            xs.append((randn, local_losses[-1]))
+
+            randn = torch.randn(shape).to(torch.device("cuda", index=cfgs.gpu))
+            x = randn.clone()
+
+        self.verbose = True
+        
+        xs.sort(key = lambda x: x[-1])
+
+        if len(xs) > 0:
+            print(f"Init local loss: Best {xs[0][1]} Worst {xs[-1][1]}")
+            x = xs[0][0]
+
+        return x
+
+    def sampler_step(self, sigma, next_sigma, model, x, cond, batch=None, uc_1=None, uc_2=None,
+                     gamma=0.0, alpha=0, iter_enabled=False, thres=None, update=False,
+                     name=None, save_loss=False, save_attn=False, save_inter=False):
+        
+        sigma_hat = sigma * (gamma + 1.0)
+        if gamma > 0:
+            eps = torch.randn_like(x) * self.s_noise
+            x = x + eps * append_dims(sigma_hat**2 - sigma**2, x.ndim) ** 0.5
+        
+        if update:
+            x = self.attend_and_excite(x, model, sigma_hat, cond, batch, alpha, iter_enabled, thres)
+
+        denoised = self.denoise(x, model, sigma_hat, cond, uc_1, uc_2)
+        denoised_decode = model.decode_first_stage(denoised) if save_inter else None
+        
+        if save_loss:
+            local_loss = model.loss_fn.get_min_local_loss(model.model.diffusion_model.attn_map_cache, batch["mask"], batch["seg_mask"])
+            local_loss = local_loss[-local_loss.shape[0]//3:]
+        else:
+            local_loss = torch.zeros(1)
+        if save_attn:
+            attn_map = model.model.diffusion_model.save_attn_map(save_name=name, save_single=True)
+            denoised_decode = model.decode_first_stage(denoised) if denoised_decode is None else denoised_decode
+            self.save_segment_map(denoised_decode, attn_map, tokens=batch["label"][0], save_name=name)
+
+        d = to_d(x, sigma_hat, denoised)
+        dt = append_dims(next_sigma - sigma_hat, x.ndim)
+
+        euler_step = self.euler_step(x, d, dt)
+
+        return euler_step, denoised_decode, local_loss
+    
+    def __call__(self, model, x, cond, batch=None, uc_1=None, uc_2=None, num_steps=None, init_step=0, 
+                 name=None, aae_enabled=False, detailed=False):
+
+        x, s_in, sigmas, num_sigmas, cond, uc_1, uc_2 = self.prepare_sampling_loop(
+            x, cond, uc_1, uc_2, num_steps
         )
 
         name = batch["name"][0]
@@ -394,7 +610,8 @@ class EulerEDMSampler(EDMSampler):
                 x,
                 cond,
                 batch,
-                uc,
+                uc_1,
+                uc_2,
                 gamma,
                 alpha=alpha,
                 iter_enabled=iter_enabled,
@@ -411,11 +628,11 @@ class EulerEDMSampler(EDMSampler):
                 inter = torch.clamp((inter + 1.0) / 2.0, min=0.0, max=1.0)[0]
                 inter = inter.cpu().numpy().transpose(1, 2, 0) * 255
                 inters.append(inter.astype(np.uint8))
-
-        # print(f"Local losses: {local_losses}")
+        
+        print(f"Local losses: {local_losses}")
 
         if len(inters) > 0:
-            imageio.mimsave(f"./temp/inters/{name}.gif", inters, 'GIF', duration=0.02)
+            imageio.mimsave(f"./temp/inters/{name}.gif", inters, 'GIF', duration=0.1)
 
         return x
 

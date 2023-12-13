@@ -65,14 +65,6 @@ def prepare_batch(cfgs, batch):
         if isinstance(batch[key], torch.Tensor):
             batch[key] = batch[key].to(torch.device("cuda", index=cfgs.gpu))
 
-    batch_uc = deep_copy(batch)
-
-    if "ntxt" in batch:
-        batch_uc["txt"] = batch["ntxt"]
-    else:
-        batch_uc["txt"] = ["" for _ in range(len(batch["txt"]))]
-
-    if "label" in batch:
-        batch_uc["label"] = ["" for _ in range(len(batch["label"]))]
+    batch_uc = batch
 
     return batch, batch_uc

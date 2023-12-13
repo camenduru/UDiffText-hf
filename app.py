@@ -8,8 +8,54 @@ from omegaconf import OmegaConf
 from contextlib import nullcontext
 from pytorch_lightning import seed_everything
 from os.path import join as ospj
+from random import randint
+from torchvision.utils import save_image
+from torchvision.transforms import Resize
  
 from util import *
+
+
+def process(image, mask):
+
+    img_h, img_w = image.shape[:2]
+
+    mask = mask[...,:1]//255
+    contours, _ = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    if len(contours) != 1: raise gr.Error("One masked area only!")
+
+    m_x, m_y, m_w, m_h = cv2.boundingRect(contours[0])
+    c_x, c_y = m_x + m_w//2, m_y + m_h//2
+
+    if img_w > img_h:
+        if m_w > img_h: raise gr.Error("Illegal mask area!")
+        if c_x < img_w - c_x:
+            c_l = max(0, c_x - img_h//2)
+            c_r = c_l + img_h
+        else:
+            c_r = min(img_w, c_x + img_h//2)
+            c_l = c_r - img_h
+        image = image[:,c_l:c_r,:]
+        mask = mask[:,c_l:c_r,:]
+    else:
+        if m_h > img_w: raise gr.Error("Illegal mask area!")
+        if c_y < img_h - c_y:
+            c_t = max(0, c_y - img_w//2)
+            c_b = c_t + img_w
+        else:
+            c_b = min(img_h, c_y + img_w//2)
+            c_t = c_b - img_w
+        image = image[c_t:c_b,:,:]
+        mask = mask[c_t:c_b,:,:]
+
+    image = torch.from_numpy(image.transpose(2,0,1)).to(dtype=torch.float32) / 127.5 - 1.0
+    mask = torch.from_numpy(mask.transpose(2,0,1)).to(dtype=torch.float32)
+
+    image = resize(image[None])[0]
+    mask = resize(mask[None])[0]
+    masked = image * (1 - mask)
+
+    return image, mask, masked
+
 
 
 def predict(cfgs, model, sampler, batch):
@@ -58,15 +104,8 @@ def demo_predict(input_blk, text, num_samples, steps, scale, seed, show_detail):
     
     image = input_blk["image"]
     mask = input_blk["mask"]
-    image = cv2.resize(image, (cfgs.W, cfgs.H))
-    mask = cv2.resize(mask, (cfgs.W, cfgs.H))
 
-    mask = (mask == 0).astype(np.int32)
-
-    image = torch.from_numpy(image.transpose(2,0,1)).to(dtype=torch.float32) / 127.5 - 1.0
-    mask = torch.from_numpy(mask.transpose(2,0,1)).to(dtype=torch.float32).mean(dim=0, keepdim=True)
-    masked = image * mask
-    mask = 1 - mask
+    image, mask, masked = process(image, mask)
 
     seg_mask = torch.cat((torch.ones(len(text)), torch.zeros(cfgs.seq_len-len(text))))
 
@@ -131,6 +170,7 @@ if __name__ == "__main__":
     model = init_model(cfgs)
     sampler = init_sampling(cfgs)
     global_index = 0
+    resize = Resize((cfgs.H, cfgs.W))
 
     block = gr.Blocks().queue()
     with block:
@@ -161,6 +201,7 @@ if __name__ == "__main__":
             with gr.Column():
 
                 input_blk = gr.Image(source='upload', tool='sketch', type="numpy", label="Input", height=512)
+                gr.Markdown("Notice: please draw horizontally to indicate only **one** masked area.")
                 text = gr.Textbox(label="Text to render: (1~12 characters)", info="the text you want to render at the masked region")
                 run_button = gr.Button(variant="primary")
 

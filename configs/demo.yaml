@@ -1,7 +1,7 @@
 type: "demo"
 
 # path
-load_ckpt_path: "./checkpoints/st-step=100000+la-step=100000-v2.ckpt"
+load_ckpt_path: "./checkpoints/st-step=100000+la-step=100000-v1.ckpt"
 model_cfg_path: "./configs/test/textdesign_sd_2.yaml"
 
 # param
@@ -15,7 +15,7 @@ channel: 4 # AE latent channel
 factor: 8 # AE downsample factor
 scale: [4.0, 0.0] # content scale, style scale
 noise_iters: 10
-force_uc_zero_embeddings: ["ref", "label"]
+force_uc_zero_embeddings: ["label"]
 aae_enabled: False
 detailed: False
 
