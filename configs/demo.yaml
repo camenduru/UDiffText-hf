@@ -13,7 +13,7 @@ batch_size: 1
 
 channel: 4 # AE latent channel
 factor: 8 # AE downsample factor
-scale: [4.0, 0.0] # content scale, style scale
+scale: [5.0, 0.0] # content scale, style scale
 noise_iters: 0
 force_uc_zero_embeddings: ["label"]
 aae_enabled: False
