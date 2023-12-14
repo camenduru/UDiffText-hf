@@ -210,7 +210,7 @@ if __name__ == "__main__":
 
                     num_samples = gr.Slider(label="Images", info="number of generated images, locked as 1", minimum=1, maximum=1, value=1, step=1)
                     steps = gr.Slider(label="Steps", info ="denoising sampling steps", minimum=1, maximum=200, value=50, step=1)
-                    scale = gr.Slider(label="Guidance Scale", info="the scale of classifier-free guidance (CFG)", minimum=0.0, maximum=10.0, value=4.0, step=0.1)
+                    scale = gr.Slider(label="Guidance Scale", info="the scale of classifier-free guidance (CFG)", minimum=0.0, maximum=10.0, value=5.0, step=0.1)
                     seed = gr.Slider(label="Seed", info="random seed for noise initialization", minimum=0, maximum=2147483647, step=1, randomize=True)
                     show_detail = gr.Checkbox(label="Show Detail", info="show the additional visualization results", value=False)
 
@@ -242,4 +242,4 @@ if __name__ == "__main__":
 
         run_button.click(fn=demo_predict, inputs=[input_blk, text, num_samples, steps, scale, seed, show_detail], outputs=[gallery, attn_map, seg_map])
 
-    block.launch()
+    block.launch(share=True)
