@@ -242,4 +242,4 @@ if __name__ == "__main__":
 
         run_button.click(fn=demo_predict, inputs=[input_blk, text, num_samples, steps, scale, seed, show_detail], outputs=[gallery, attn_map, seg_map])
 
-    block.launch()
+    block.launch(share=True)
